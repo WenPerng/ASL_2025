@@ -5,24 +5,25 @@ clear; close all; clc;
 %% Setting Up the Simulation: Variables, Parameters, and Function Handles
 cell2Mat = @(cellOfMatrices, index) cellToMatrixConversion(cellOfMatrices, index);
 
+progressType = 1;
 
 % Descent Parameters ------------------------------------------------------
-stepsize    = 0.001 * 2 .^ (-2 : -1 : -2);      % all step-sizes to be tested
-totalIter   = 1 * 10 ^ 5;                       % number of iterations
+stepsize    = 0.001 * 2 .^ (+2 : -1 : -2);      % all step-sizes to be tested
+totalIter   = 2 * 10 ^ 4;                       % number of iterations
 totalSample = 01;                               % number of samples
 
 % Noise
 sigma = 0.1;            % radius of the uniformly-dirstributed gradient noise
 
 % Convexity
-lambda = 2.1;           % ratio between epsilon and delta (value > T-1)!
+lambda = 2.10;          % ratio between epsilon and delta (value > T-1)!
 
 % Game Parameters ---------------------------------------------------------
-Kt = [3, 3, 3];        % number of players in each team
-K  = sum(Kt);       % total number of players
-Mt = [1, 1, 1];        % strategy size of each team
-M  = sum(Mt);       % total dimension of strategies
-T  = length(Kt);    % total number of teams
+Kt = [3, 3, 3, 3];      % number of players in each team
+K  = sum(Kt);           % total number of players
+Mt = [1, 2, 1, 2];      % strategy size of each team
+M  = sum(Mt);           % total dimension of strategies
+T  = length(Kt);        % total number of teams
 playerLowerLim = @(tTeam) sum(Kt(1 : tTeam - 1)) + 1;
 playerUpperLim = @(tTeam) sum(Kt(1 : tTeam));
 stratLowerLim  = @(tTeam) sum(Mt(1 : tTeam - 1)) + 1;
@@ -125,8 +126,10 @@ end
 for nStepsize = 1 : length(stepsize)
     mu = stepsize(nStepsize);
     for nSample = 1 : totalSample
-        disp(['Progress:', num2str(nStepsize), '/', num2str(length(stepsize)), ...
-              ', ', num2str(nSample), '/', num2str(totalSample), '.']);
+        if progressType == 1
+            disp(['Progress:', num2str(nStepsize), '/', num2str(length(stepsize)), ...
+                  ', ', num2str(nSample), '/', num2str(totalSample), '.']);
+        end
 
         % initialization --------------------------------------------------
         X = cell(T, 1);
@@ -136,6 +139,10 @@ for nStepsize = 1 : length(stepsize)
 
         % Iteration -------------------------------------------------------
         for iIter = 1 : totalIter
+            if (progressType == 2) && (mod(iIter, totalIter / 20) == 0)
+                disp(['Progress:', num2str(iIter), '/', num2str(totalIter),'.']);
+            end
+
             % Strategy and Estimates of Each Player
             vecXk = cell(K, 1);
             for kPlayer = 1 : K

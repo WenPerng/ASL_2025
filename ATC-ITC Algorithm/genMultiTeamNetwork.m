@@ -1,8 +1,8 @@
 function genMultiTeamNetwork(K)
 %% Initialization
 T = length(K);
-A = cell(T,1);
-C = cell(T,T);
+A = cell(T, 1);
+C = cell(T, T);
 
 %% Network Structure
 switch T
@@ -66,14 +66,35 @@ switch T
         C12 = [1/10,   0,   0;
                   0,   0,   0;
                   0,   0,   0;];
-        C13 = C12;
         C21 = C12;
         C22 = [9/20, 1/3,   0;
                9/20, 1/3, 1/2;
                   0, 1/3, 1/2];
         C = {C11, C12; C21, C22};
     otherwise
-        disp('Size of network not implemented yet!');
+        disp(['Size of network not implemented yet! ', ...
+              'Hence, a crude non-random network consisting of ', ...
+              num2str(T), ' teams is given.']);
+        Atemp = [1/3,1/2,1/2;
+                 1/3,1/2,  0;
+                 1/3,  0,1/2];
+        Ctemp = [3/10, 1/2, 1/2;
+                 3/10, 1/2,   0;
+                 3/10,   0, 1/2];
+        Dtemp = [1/10,   0,   0;
+                    0,   0,   0;
+                    0,   0,   0;];
+
+        for tTeam = 1 : T
+            A(tTeam) = {Atemp};
+            for sTeam = 1 : T
+                if sTeam == tTeam
+                    C(sTeam,tTeam) = {Ctemp};
+                else
+                    C(sTeam,tTeam) = {Dtemp};
+                end
+            end
+        end
 end
 
 %% Save Data

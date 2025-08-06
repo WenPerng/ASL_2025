@@ -3,26 +3,27 @@
 % There are K1 + K2 players.
 % The strategies for the K1/2's are of size M1/2.
 
-function genMultiTeamMatrixGame(Kt,Mt,lambda)
+function genMultiTeamMatrixGame(Kt, Mt, lambda)
 T = length(Kt);
+
 %% Initialization
 % Function handles
-PD = @(k) PositiveDefinite(k,lambda);
+PD = @(k) PositiveDefinite(k, lambda);
 
 % Variable allocation
-K = sum(Kt);
-Ak = cell(K,1);
-bk = cell(K,1);
-Ck = cell(K,1);
+K  = sum(Kt);
+Ak = cell(K, 1);
+bk = cell(K, 1);
+Ck = cell(K, 1);
 
 %% Generation
-for t = 1:T
+for t = 1 : T
     playerLowerLim = sum(Kt(1 : t - 1)) + 1;
     playerUpperLim = sum(Kt(1 : t));
     for k = playerLowerLim : playerUpperLim
         Ak(k)  = {PD(Mt(t))};
-        bk(k)  = {rand(Mt(t), 1)};
-        C_temp = ones(Mt(t), sum(Mt));%2 * rand(Mt(t),sum(Mt)) - 0.5;
+        bk(k)  = {2 * rand(Mt(t), 1) - 1};
+        C_temp = 2 * rand(Mt(t), sum(Mt)) - 1;
 
         stratLowerLim = sum(Mt(1 : t - 1)) + 1;
         stratUpperLim = sum(Mt(1 : t));
@@ -32,12 +33,14 @@ for t = 1:T
 end
 
 %% Save Data
-save('Matrix_game_data_multiTeam.mat',"Ak","bk","Ck");
+save('Matrix_game_data_multiTeam.mat', "Ak", "bk", "Ck");
 end
 
 %% Functions
-function X = PositiveDefinite(k,lambda)
-    D = diag(0*rand(k,1)+lambda);
-    U = rand(k,k); U = U - U'; U = expm(U);
+function X = PositiveDefinite(k, lambda)
+    D = diag(1 * rand(k, 1) + lambda);
+    U = rand(k, k);
+    U = U - U';
+    U = expm(U);
     X = U' * D * U;
 end
