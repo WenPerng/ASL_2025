@@ -1,37 +1,45 @@
 %% ATC-ITC over Games between a Network of Mutiple Teams
-% This code ...
+% This code does not require any further toolbox to run.
+%
+% This code simulates the performance of the ATC-ITC (adapt-then-combine,
+% inference-then-combin) algorithm
 clear; close all; clc;
 
 %% Setting Up the Simulation: Variables, Parameters, and Function Handles
 cell2Mat = @(cellOfMatrices, index) cellToMatrixConversion(cellOfMatrices, index);
 
-progressType = 1;
+progressBarType = 1; % 0, 1
+performanceLine = 1; % 0, 1
 
 % Descent Parameters ------------------------------------------------------
-stepsize    = 0.001 * 2 .^ (+2 : -1 : -2);      % all step-sizes to be tested
-totalIter   = 2 * 10 ^ 4;                       % number of iterations
-totalSample = 01;                               % number of samples
+stepsize    = 0.001 * 2 .^ (+3 : -1 : -3);      % all step-sizes to be tested
+totalIter   = 1 * 10 ^ 4;                       % number of iterations
+totalSample = 010;                              % number of samples
 
 % Noise
-sigma = 0.1;            % radius of the uniformly-dirstributed gradient noise
+sigma = 0.10;           % radius of the uniformly-dirstributed gradient noise
 
 % Convexity
-lambda = 2.10;          % ratio between epsilon and delta (value > T-1)!
+lambda = 010;           % ratio between epsilon and delta (value > T-1)!
 
 % Game Parameters ---------------------------------------------------------
-Kt = [3, 3, 3, 3];      % number of players in each team
+Kt = [3, 3, 3];         % number of players in each team
 K  = sum(Kt);           % total number of players
-Mt = [1, 2, 1, 2];      % strategy size of each team
+Mt = [1, 1, 2];         % strategy size of each team
 M  = sum(Mt);           % total dimension of strategies
 T  = length(Kt);        % total number of teams
+
+% Block Sizes
 playerLowerLim = @(tTeam) sum(Kt(1 : tTeam - 1)) + 1;
 playerUpperLim = @(tTeam) sum(Kt(1 : tTeam));
 stratLowerLim  = @(tTeam) sum(Mt(1 : tTeam - 1)) + 1;
 stratUpperLim  = @(tTeam) sum(Mt(1 : tTeam));
+blkLowerLim    = @(tau, t) K * sum(Mt(1 : tau - 1)) + sum(Kt(1 : t - 1)) * Mt(tau) + 1;
+blkUpperLim    = @(tau, t) K * sum(Mt(1 : tau - 1)) + sum(Kt(1 : t)) * Mt(tau);
 
 % Network Structure -------------------------------------------------------
 genMultiTeamNetwork(Kt);
-load("Network_structure_multiTeam.mat")
+load("Network_structure_multiTeam.mat");
 
 % Perron Vector of Each Team
 p = cell(T, 1);
@@ -48,17 +56,17 @@ B = cell(T, 1);
 for sTeam = 1 : T
     tempB = zeros(K, K);
     for tTeam = 1 : T
-        playerLowerLim = sum(Kt(1 : tTeam - 1)) + 1;
-        playerUpperLim = sum(Kt(1 : tTeam));
+        lowerLim = playerLowerLim(tTeam);
+        upperLim = playerUpperLim(tTeam);
         if tTeam == sTeam
             blkRow = [];
             for kPlayer = 1 : T
                 blkRow = [blkRow, cell2Mat(C, [sTeam, kPlayer])];
             end
-            tempB(playerLowerLim : playerUpperLim, :) = cell2Mat(A, tTeam) * blkRow;
-            tempB(playerLowerLim : playerUpperLim, playerLowerLim : playerUpperLim) = cell2Mat(A, tTeam);
+            tempB(lowerLim : upperLim, :) = cell2Mat(A, tTeam) * blkRow;
+            tempB(lowerLim : upperLim, lowerLim : upperLim) = cell2Mat(A, tTeam);
         else
-            tempB(playerLowerLim : playerUpperLim, playerLowerLim : playerUpperLim) = cell2Mat(C, [tTeam, tTeam]);
+            tempB(lowerLim : upperLim, lowerLim : upperLim) = cell2Mat(C, [tTeam, tTeam]);
         end
     end
     B(sTeam) = {tempB};
@@ -91,7 +99,7 @@ for tTeam = 1 : T
     bkAggTemp  = 0;
     CkAggTemp  = 0;
     pt         = cell2Mat(p, tTeam);
-    lowerRange = sum(Kt(1 : tTeam - 1));
+    lowerRange = playerLowerLim(tTeam) - 1;
     for kPlayer = 1 : Kt(tTeam)
         AkAggTemp = AkAggTemp + pt(kPlayer) * cell2Mat(Ak, lowerRange + kPlayer);
         bkAggTemp = bkAggTemp + pt(kPlayer) * cell2Mat(bk, lowerRange + kPlayer);
@@ -106,12 +114,12 @@ end
 NashMat = zeros(M, M);
 NashVec = zeros(M, 1);
 for tTeam = 1 : T
-    stratLowerLim = sum(Mt(1 : tTeam - 1)) + 1;
-    stratUpperLim = sum(Mt(1 : tTeam));
+    lowerLim = stratLowerLim(tTeam);
+    upperLim = stratUpperLim(tTeam);
 
-    NashMat(stratLowerLim : stratUpperLim, :)                             = cell2Mat(CkAgg, tTeam);
-    NashMat(stratLowerLim : stratUpperLim, stratLowerLim : stratUpperLim) = cell2Mat(AkAgg, tTeam);
-    NashVec(stratLowerLim : stratUpperLim)                                = cell2Mat(bkAgg, tTeam);
+    NashMat(lowerLim : upperLim, :)                   = cell2Mat(CkAgg, tTeam);
+    NashMat(lowerLim : upperLim, lowerLim : upperLim) = cell2Mat(AkAgg, tTeam);
+    NashVec(lowerLim : upperLim)                      = cell2Mat(bkAgg, tTeam);
 end
 
 xStar = - inv(NashMat) * NashVec;
@@ -121,12 +129,89 @@ for tTeam = 1 : T
         kron(ones(K, 1), xStar(sum(Mt(1 : tTeam - 1)) + 1 : sum(Mt(1 : tTeam))));
 end
 
+%% MSD Performance
+switch performanceLine
+    case 0
+    case 1
+        % \mathcal{R}
+        R     = (sigma ^ 2 / 3) * eye(K * M);
+        
+        % \mathcal{A}
+        Acomb = eye(K * M);
+        for tauTeam = 1 : T
+            lowerLim = blkLowerLim(tauTeam,tauTeam);
+            upperLim = blkUpperLim(tauTeam,tauTeam);
+            Acomb(lowerLim : upperLim, lowerLim : upperLim) = kron(cell2Mat(A,tauTeam)', eye(Mt(tauTeam)));
+        end
+        
+        % \mathcal{C}
+        Ccomb = zeros(K * M);
+        for tauTeam = 1 : T
+            for tTeam = 1 : T
+                rowLowerLim = blkLowerLim(tauTeam, tTeam);
+                rowUpperLim = blkUpperLim(tauTeam, tTeam);
+                for sTeam = 1 : T
+                    colLowerLim = blkLowerLim(tauTeam, sTeam);
+                    colUpperLim = blkUpperLim(tauTeam, sTeam);
+                    if (sTeam == tauTeam) && (tTeam == sTeam)
+                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = eye(Kt(tTeam) * Mt(tTeam));
+                    elseif (sTeam == tauTeam)
+                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = kron(cell2Mat(C,[sTeam,tTeam])', eye(Mt(tauTeam)));
+                    elseif (tTeam == sTeam)
+                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = kron(cell2Mat(C,[tTeam,tTeam])', eye(Mt(tauTeam)));
+                    else
+                    end
+                end
+            end
+        end
+        
+        % \mathcal{H}
+        Hcomb = zeros(K * M);
+        for tau1Team = 1 : T
+            teamLowerLim = playerLowerLim(tau1Team);
+            teamUpperLim = playerUpperLim(tau1Team);
+            for tau2Team = 1 : T
+                for kPlayer = 1 : K
+                    rowLowerLim = K * sum(Mt(1 : tau1Team - 1)) + (kPlayer - 1) * Mt(tau1Team) + 1;
+                    rowUpperLim = K * sum(Mt(1 : tau1Team - 1)) + kPlayer * Mt(tau1Team);
+                    colLowerLim = K * sum(Mt(1 : tau2Team - 1)) + (kPlayer - 1) * Mt(tau2Team) + 1;
+                    colUpperLim = K * sum(Mt(1 : tau2Team - 1)) + kPlayer * Mt(tau2Team);
+                    if (kPlayer >= teamLowerLim) && (kPlayer <= teamUpperLim)
+                        if tau1Team == tau2Team
+                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = cell2Mat(Ak,kPlayer);
+                        else
+                            tempC = cell2Mat(Ck,kPlayer);
+                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = ...
+                                tempC(:, stratLowerLim(tau2Team) : stratUpperLim(tau2Team));
+                        end
+                    else
+                        ellPlayer = playerLowerLim(tau1Team) + mod(kPlayer, Kt(tau1Team));
+                        if tau1Team == tau2Team
+                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = cell2Mat(Ak,ellPlayer);
+                        else
+                            tempC = cell2Mat(Ck,ellPlayer);
+                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = ...
+                                tempC(:, stratLowerLim(tau2Team) : stratUpperLim(tau2Team));
+                        end
+                    end
+                end
+            end
+        end
+        
+        % \mathcal{Y}
+        Ycomb = Acomb' * Ccomb' * R * Ccomb * Acomb;
+        
+        % Function handle
+        DTLyap = @(B,Y) solveDiscreteLyapunov(B,Y);
+    otherwise
+        disp('The desired order of performance is not yet implemented.');
+end
 
 %% Recursion: Running the ATC-ITC Algorithm
 for nStepsize = 1 : length(stepsize)
     mu = stepsize(nStepsize);
     for nSample = 1 : totalSample
-        if progressType == 1
+        if progressBarType == 1
             disp(['Progress:', num2str(nStepsize), '/', num2str(length(stepsize)), ...
                   ', ', num2str(nSample), '/', num2str(totalSample), '.']);
         end
@@ -139,7 +224,7 @@ for nStepsize = 1 : length(stepsize)
 
         % Iteration -------------------------------------------------------
         for iIter = 1 : totalIter
-            if (progressType == 2) && (mod(iIter, totalIter / 20) == 0)
+            if (progressBarType == 2) && (mod(iIter, totalIter / 20) == 0)
                 disp(['Progress:', num2str(iIter), '/', num2str(totalIter),'.']);
             end
 
@@ -149,10 +234,10 @@ for nStepsize = 1 : length(stepsize)
                 singleXk = zeros(M, 1);
                 for sTeam = 1 : T
                     sTeamStrat    = cell2Mat(X, sTeam);
-                    stratLowerLim = sum(Mt(1 : sTeam - 1)) + 1;
-                    stratUpperLim = sum(Mt(1 : sTeam));
+                    lowerLim = stratLowerLim(sTeam);
+                    upperLim = stratUpperLim(sTeam);
 
-                    singleXk(stratLowerLim : stratUpperLim) = sTeamStrat(:, kPlayer);
+                    singleXk(lowerLim : upperLim) = sTeamStrat(:, kPlayer);
                 end
                 vecXk(kPlayer) = {singleXk};
             end
@@ -162,13 +247,13 @@ for nStepsize = 1 : length(stepsize)
             gradient = cell(T, 1);
             for tTeam = 1 : T
                 tTeamGrad = zeros(Mt(tTeam), K);
-                playerLowerLim = sum(Kt(1 : tTeam - 1)) + 1;
-                playerUpperLim = sum(Kt(1 : tTeam));
+                teamLowerLim = playerLowerLim(tTeam);
+                teamUpperLim = playerUpperLim(tTeam);
                 for kPlayer = 1 : K
-                    if (kPlayer >= playerLowerLim) && (kPlayer <= playerUpperLim)
+                    if (kPlayer >= teamLowerLim) && (kPlayer <= teamUpperLim)
                         tTeamGrad(:, kPlayer) = localGradient(tTeam, kPlayer, cell2Mat(vecXk, kPlayer));
                     else
-                        ellPlayer = playerLowerLim + mod(kPlayer, Kt(tTeam));
+                        ellPlayer = teamLowerLim + mod(kPlayer, Kt(tTeam));
                         tTeamGrad(:, kPlayer) = localGradient(tTeam, ellPlayer, cell2Mat(vecXk, kPlayer));
                     end
                 end
@@ -184,21 +269,33 @@ for nStepsize = 1 : length(stepsize)
             % Recording the Vector of State to Nash Equilibrium
             vecX = zeros(K * M, 1);
             for tTeam = 1 : T
-                stratLowerLim = K * sum(Mt(1 : tTeam - 1)) + 1;
-                stratUpperLim = K * sum(Mt(1 : tTeam));
-                tTeamStrat    = cell2Mat(X, tTeam); 
-                vecX(stratLowerLim : stratUpperLim) = tTeamStrat(:);
+                teamLowerLim = K * (stratLowerLim(tTeam) - 1) + 1;
+                teamUpperLim = K * stratUpperLim(tTeam);
+                tTeamStrat   = cell2Mat(X, tTeam);
+
+                vecX(teamLowerLim : teamUpperLim) = tTeamStrat(:);
             end
             vecX2NE(:, iIter, nSample) = XStar - vecX;
         end
     end
+    
     % Performance ---------------------------------------------------------
     % taking average of each sample
     avgSquaredDistX2NE = mean(vecnorm(vecX2NE) .^ 2, 3);
     hold on
     plot(1 : totalIter, avgSquaredDistX2NE, 'DisplayName', ['$\mu = ', num2str(mu), '$']);
     hold off
-
+    
+    switch performanceLine
+        case 0
+        case 1
+            % MSD
+            Xlyap = DTLyap(Ccomb * Acomb * (eye(K * M) - mu * Hcomb), Ycomb);
+            MSD   = trace(Xlyap);
+            yline(mu ^ 2 * MSD,'--','HandleVisibility','off');
+        otherwise
+    end
+    
     % store performance of stepsize
     distX2NE(nStepsize) = max(avgSquaredDistX2NE(end - totalIter / 10 : end));
 end
@@ -208,7 +305,7 @@ grid on;
 set(gca, 'YScale', 'log');
 title('Convergence to Nash Equilibrium');
 xlabel('Iteration');
-ylabel('$||z-z^\star||^2$', 'Interpreter', 'latex');
+ylabel('$||x-x^\star||^2$', 'Interpreter', 'latex');
 legend('Interpreter', 'latex');
 fontname('Times New Roman');
 
@@ -216,6 +313,15 @@ fontname('Times New Roman');
 beta  = pinv([ones(length(stepsize), 1), log(stepsize')]) * log(distX2NE');
 slope = beta(2);
 disp(['Convergence radius is of size O(\mu^(', num2str(slope), ')).']);
+figure;
+plot(stepsize,distX2NE);
+grid on;
+set(gca,'XScale','log','YScale','log');
+title('Distance to Nash Equilibrium')
+xlabel('$\mu$','Interpreter','latex');
+ylabel('$\limsup||x-x^\star||^2$', 'Interpreter', 'latex');
+set(gcf,'color',[1,1,1]);
+fontname('Times New Roman');
 
 %% Functions
 function mat = cellToMatrixConversion(cellOfMatrices, index)
@@ -280,4 +386,18 @@ for tTeam = 1 : T
 
     globalGradient(stratLowerLim : stratUpperLim) = teamGradient;
 end
+end
+
+function X = solveDiscreteLyapunov(B,Y)
+% Solve the discrete-time Lyapunov equation of the form
+%       X - B * X * B' = Y.
+% Input:
+%       B       A square matrix.
+%       Y       A sqaure matrix of same size as 'B'.
+% Output:
+%       X       The solution to the Lyapunov equation.
+
+    N = size(B,1) ^ 2;
+    X = inv(eye(N) - kron(B', B')) * Y(:);
+    X = reshape(X,size(B));
 end

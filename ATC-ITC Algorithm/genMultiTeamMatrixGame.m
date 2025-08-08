@@ -22,8 +22,8 @@ for t = 1 : T
     playerUpperLim = sum(Kt(1 : t));
     for k = playerLowerLim : playerUpperLim
         Ak(k)  = {PD(Mt(t))};
-        bk(k)  = {2 * rand(Mt(t), 1) - 1};
-        C_temp = 2 * rand(Mt(t), sum(Mt)) - 1;
+        bk(k)  = {0.1 * rand(Mt(t), 1) + 4};%{5 * ones(Mt(t),1)};
+        C_temp = 0.1 * rand(Mt(t), sum(Mt)) - 1;%-ones(Mt(t), sum(Mt));
 
         stratLowerLim = sum(Mt(1 : t - 1)) + 1;
         stratUpperLim = sum(Mt(1 : t));
@@ -38,7 +38,7 @@ end
 
 %% Functions
 function X = PositiveDefinite(k, lambda)
-    D = diag(1 * rand(k, 1) + lambda);
+    D = diag(0.1 * rand(k, 1) + lambda);
     U = rand(k, k);
     U = U - U';
     U = expm(U);
