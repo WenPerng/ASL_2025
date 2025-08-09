@@ -9,12 +9,12 @@ clear; close all; clc;
 cell2Mat = @(cellOfMatrices, index) cellToMatrixConversion(cellOfMatrices, index);
 
 progressBarType = 1; % 0, 1
-performanceLine = 1; % 0, 1
+performanceLine = 'MSD1'; % 'none', 'MSD1', 'MSD1Bar'
 
 % Descent Parameters ------------------------------------------------------
-stepsize    = 0.001 * 2 .^ (+3 : -1 : -3);      % all step-sizes to be tested
-totalIter   = 1 * 10 ^ 4;                       % number of iterations
-totalSample = 010;                              % number of samples
+stepsize    = 0.001 * 2 .^ (+3 : -1 : +1);      % all step-sizes to be tested
+totalIter   = 1 * 10 ^ 3;                       % number of iterations
+totalSample = 100;                              % number of samples
 
 % Noise
 sigma = 0.10;           % radius of the uniformly-dirstributed gradient noise
@@ -131,8 +131,8 @@ end
 
 %% MSD Performance
 switch performanceLine
-    case 0
-    case 1
+    case 'none'
+    case 'MSD1'
         % \mathcal{R}
         R     = (sigma ^ 2 / 3) * eye(K * M);
         
@@ -202,7 +202,22 @@ switch performanceLine
         Ycomb = Acomb' * Ccomb' * R * Ccomb * Acomb;
         
         % Function handle
-        DTLyap = @(B,Y) solveDiscreteLyapunov(B,Y);
+        DTLyap = @(B,Y) solveDTLyapunov(B,Y);
+    % case 'MSD1Bar'
+        D11 = zeros(M, M);
+        R   = eye(M, M);
+        for tTeam = 1 : T
+            lowerLim = stratLowerLim(tTeam);
+            upperLim = stratUpperLim(tTeam);
+            D11(lowerLim : upperLim, :) = cell2Mat(CkAgg,tTeam);
+            D11(lowerLim : upperLim, lowerLim : upperLim) = cell2Mat(AkAgg,tTeam);
+
+            R(lowerLim : upperLim, lowerLim : upperLim)   = R(lowerLim : upperLim, lowerLim : upperLim) ...
+                                                            * (sigma ^ 2 / 3) * norm(cell2Mat(p, tTeam)) ^ 2;
+        end
+        W = solveCTLyapunov(D11, eye(M));
+
+        MSD1Bar = trace(W * R);
     otherwise
         disp('The desired order of performance is not yet implemented.');
 end
@@ -286,13 +301,15 @@ for nStepsize = 1 : length(stepsize)
     plot(1 : totalIter, avgSquaredDistX2NE, 'DisplayName', ['$\mu = ', num2str(mu), '$']);
     hold off
     
+    % MSD performance line
     switch performanceLine
-        case 0
-        case 1
-            % MSD
+        case 'none'
+        case 'MSD1'
             Xlyap = DTLyap(Ccomb * Acomb * (eye(K * M) - mu * Hcomb), Ycomb);
-            MSD   = trace(Xlyap);
-            yline(mu ^ 2 * MSD,'--','HandleVisibility','off');
+            MSD1  = trace(Xlyap);
+            yline(mu ^ 2 * MSD1, 'b--', 'HandleVisibility', 'off');
+        % case 'MSD1Bar'
+            yline(K * mu * MSD1Bar, 'r--', 'HandleVisibility', 'off');
         otherwise
     end
     
@@ -388,7 +405,7 @@ for tTeam = 1 : T
 end
 end
 
-function X = solveDiscreteLyapunov(B,Y)
+function X = solveDTLyapunov(B,Y)
 % Solve the discrete-time Lyapunov equation of the form
 %       X - B * X * B' = Y.
 % Input:
@@ -400,4 +417,18 @@ function X = solveDiscreteLyapunov(B,Y)
     N = size(B,1) ^ 2;
     X = inv(eye(N) - kron(B', B')) * Y(:);
     X = reshape(X,size(B));
+end
+
+function W = solveCTLyapunov(D,Y)
+% Solve the continuous-time Lyapunov equation of the form
+%       WD + D'W = Y.
+% Input:
+%       D       A square matrix.
+%       Y       A sqaure matrix of same size as 'D'.
+% Output:
+%       W       The solution to the Lyapunov equation.
+
+    N = size(D,1);
+    W = inv(kron(D', eye(N)) + kron(eye(N), D')) * Y(:);
+    W = reshape(W,size(D));
 end
