@@ -1,7 +1,7 @@
-% Updated: 0803
+% Updated: 0811
 % This code generates a matrix game automatically.
-% There are K1 + K2 players.
-% The strategies for the K1/2's are of size M1/2.
+% There are K players, from a total of T teams.
+% The strategies for the 't'th team is Mt(t).
 
 function genMultiTeamMatrixGame(Kt, Mt, lambda)
 T = length(Kt);
@@ -20,15 +20,21 @@ Ck = cell(K, 1);
 for t = 1 : T
     playerLowerLim = sum(Kt(1 : t - 1)) + 1;
     playerUpperLim = sum(Kt(1 : t));
-    for k = playerLowerLim : playerUpperLim
-        Ak(k)  = {PD(Mt(t))};
-        bk(k)  = {0.1 * rand(Mt(t), 1) + 4};%{5 * ones(Mt(t),1)};
-        C_temp = 0.1 * rand(Mt(t), sum(Mt)) - 1;%-ones(Mt(t), sum(Mt));
+    
+    tempATeam = PD(Mt(t));
+    tempBTeam = 1 * rand(Mt(t), 1) + 4;
+    tempCTeam = 1 * rand(Mt(t), sum(Mt)) - 1;
 
-        stratLowerLim = sum(Mt(1 : t - 1)) + 1;
-        stratUpperLim = sum(Mt(1 : t));
-        C_temp(:, stratLowerLim : stratUpperLim) = 0;
-        Ck(k) = {C_temp}; %%%%%%%%%%%%%%%%%%%%%%%%%%%%%%%
+    stratLowerLim = sum(Mt(1 : t - 1)) + 1;
+    stratUpperLim = sum(Mt(1 : t));
+
+    for k = playerLowerLim : playerUpperLim
+        Ak(k) = {tempATeam};
+        bk(k) = {tempBTeam + 0.2 * rand(Mt(t), 1) - 0.1};
+
+        tempCk = tempCTeam  + 0.2 * rand(Mt(t), sum(Mt)) - 0.1;
+        tempCk(:, stratLowerLim : stratUpperLim) = 0;
+        Ck(k) = {tempCk};
     end
 end
 
@@ -38,7 +44,7 @@ end
 
 %% Functions
 function X = PositiveDefinite(k, lambda)
-    D = diag(0.1 * rand(k, 1) + lambda);
+    D = diag(1 * rand(k, 1) + lambda);%diag(lambda * ones(k, 1));
     U = rand(k, k);
     U = U - U';
     U = expm(U);

@@ -2,20 +2,19 @@
 % This code does not require any further toolbox to run.
 %
 % This code simulates the performance of the ATC-ITC (adapt-then-combine,
-% inference-then-combin) algorithm
+% inference-then-combin) algorithm.
+% The step-sizes are diminishing in the rate of 1/i.
 clear; close all; clc;
 
 %% Setting Up the Simulation: Variables, Parameters, and Function Handles
 cell2Mat = @(cellOfMatrices, index) cellToMatrixConversion(cellOfMatrices, index);
 
 progressBarType = 2; % 1, 2
-performanceLine = 'MSD1'; % 'none', 'MSD1', 'MSD1Bar'
-convRateToggle  = false; % true, false
 
 % Descent Parameters ------------------------------------------------------
-stepsize    = 0.001 * 2 .^ (-4.5 : -0.5 : -5.5);    % all step-sizes to be tested
-totalIter   = 1 * 10 ^ 3;                           % number of iterations
-totalSample = 100;                                  % number of samples
+stepsize    = 0.001 * 2 .^ (-0 : -1 : -0);          % all step-sizes to be tested
+totalIter   = 1 * 10 ^ 6;                           % number of iterations
+totalSample = 001;                                  % number of samples
 
 % Noise
 sigma = 1.00;           % radius of the uniformly-dirstributed gradient noise
@@ -131,102 +130,8 @@ for tTeam = 1 : T
         kron(ones(K, 1), xStar(sum(Mt(1 : tTeam - 1)) + 1 : sum(Mt(1 : tTeam))));
 end
 
-%% MSD Performance
-switch performanceLine
-    case 'none'
-    case 'MSD1'
-        % \mathcal{R}
-        R     = (sigma ^ 2 / 3) * eye(K * M);
-        
-        % \mathcal{A}
-        Acomb = eye(K * M);
-        for tauTeam = 1 : T
-            lowerLim = blkLowerLim(tauTeam,tauTeam);
-            upperLim = blkUpperLim(tauTeam,tauTeam);
-            Acomb(lowerLim : upperLim, lowerLim : upperLim) = kron(cell2Mat(A,tauTeam)', eye(Mt(tauTeam)));
-        end
-        
-        % \mathcal{C}
-        Ccomb = zeros(K * M);
-        for tauTeam = 1 : T
-            for tTeam = 1 : T
-                rowLowerLim = blkLowerLim(tauTeam, tTeam);
-                rowUpperLim = blkUpperLim(tauTeam, tTeam);
-                for sTeam = 1 : T
-                    colLowerLim = blkLowerLim(tauTeam, sTeam);
-                    colUpperLim = blkUpperLim(tauTeam, sTeam);
-                    if (sTeam == tauTeam) && (tTeam == sTeam)
-                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = eye(Kt(tTeam) * Mt(tTeam));
-                    elseif (sTeam == tauTeam)
-                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = kron(cell2Mat(C,[sTeam,tTeam])', eye(Mt(tauTeam)));
-                    elseif (tTeam == sTeam)
-                        Ccomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = kron(cell2Mat(C,[tTeam,tTeam])', eye(Mt(tauTeam)));
-                    else
-                    end
-                end
-            end
-        end
-        
-        % \mathcal{H}
-        Hcomb = zeros(K * M);
-        for tau1Team = 1 : T
-            teamLowerLim = playerLowerLim(tau1Team);
-            teamUpperLim = playerUpperLim(tau1Team);
-            for tau2Team = 1 : T
-                for kPlayer = 1 : K
-                    rowLowerLim = K * sum(Mt(1 : tau1Team - 1)) + (kPlayer - 1) * Mt(tau1Team) + 1;
-                    rowUpperLim = K * sum(Mt(1 : tau1Team - 1)) + kPlayer * Mt(tau1Team);
-                    colLowerLim = K * sum(Mt(1 : tau2Team - 1)) + (kPlayer - 1) * Mt(tau2Team) + 1;
-                    colUpperLim = K * sum(Mt(1 : tau2Team - 1)) + kPlayer * Mt(tau2Team);
-                    if (kPlayer >= teamLowerLim) && (kPlayer <= teamUpperLim)
-                        if tau1Team == tau2Team
-                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = cell2Mat(Ak,kPlayer);
-                        else
-                            tempC = cell2Mat(Ck,kPlayer);
-                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = ...
-                                tempC(:, stratLowerLim(tau2Team) : stratUpperLim(tau2Team));
-                        end
-                    else
-                        ellPlayer = playerLowerLim(tau1Team) + mod(kPlayer, Kt(tau1Team));
-                        if tau1Team == tau2Team
-                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = cell2Mat(Ak,ellPlayer);
-                        else
-                            tempC = cell2Mat(Ck,ellPlayer);
-                            Hcomb(rowLowerLim : rowUpperLim, colLowerLim : colUpperLim) = ...
-                                tempC(:, stratLowerLim(tau2Team) : stratUpperLim(tau2Team));
-                        end
-                    end
-                end
-            end
-        end
-        
-        % \mathcal{Y}
-        Ycomb = Acomb' * Ccomb' * R * Ccomb * Acomb;
-        
-        % Function handle
-        DTLyap = @(B,Y) solveDTLyapunov(B,Y);
-    case 'MSD1Bar'
-        D11 = zeros(M, M);
-        R   = eye(M, M);
-        for tTeam = 1 : T
-            lowerLim = stratLowerLim(tTeam);
-            upperLim = stratUpperLim(tTeam);
-            D11(lowerLim : upperLim, :) = cell2Mat(CkAgg,tTeam);
-            D11(lowerLim : upperLim, lowerLim : upperLim) = cell2Mat(AkAgg,tTeam);
-
-            R(lowerLim : upperLim, lowerLim : upperLim)   = R(lowerLim : upperLim, lowerLim : upperLim) ...
-                                                            * (sigma ^ 2 / 3) * norm(cell2Mat(p, tTeam)) ^ 2;
-        end
-        W = solveCTLyapunov(D11, eye(M));
-
-        MSD1Bar = trace(W * R);
-    otherwise
-        disp('The desired order of performance is not yet implemented.');
-end
-
 %% Recursion: Running the ATC-ITC Algorithm
 for nStepsize = 1 : length(stepsize)
-    mu = stepsize(nStepsize);
     for nSample = 1 : totalSample
         if progressBarType == 1
             disp(['Progress:', num2str(nStepsize), '/', num2str(length(stepsize)), ...
@@ -281,6 +186,7 @@ for nStepsize = 1 : length(stepsize)
             end
             
             % Recursion: Update State
+            mu = stepsize(nStepsize) / iIter * 100;
             for tTeam = 1 : T
                 X(tTeam) = {(cell2Mat(X, tTeam) - mu * cell2Mat(gradient, tTeam)) * cell2Mat(B, tTeam)};
             end
@@ -307,25 +213,6 @@ for nStepsize = 1 : length(stepsize)
     
     % store performance of stepsize
     distX2NE(nStepsize) = max(avgSquaredDistX2NE(end - totalIter / 10 : end));
-
-    % MSD performance line
-    switch performanceLine
-        case 'none'
-        case 'MSD1'
-            Xlyap = DTLyap(Ccomb * Acomb * (eye(K * M) - mu * Hcomb), Ycomb);
-            MSD1  = trace(Xlyap);
-            yline(mu ^ 2 * MSD1, 'b--', 'HandleVisibility', 'off');
-        case 'MSD1Bar'
-            yline(K * mu * MSD1Bar, 'r--', 'HandleVisibility', 'off');
-        otherwise
-    end
-
-    % Convergence rate
-    if convRateToggle
-        alpha = pinv([ones(totalIter, 1), (1 : totalIter)']) * log(avgSquaredDistX2NE)';
-        convRate(nStepsize) = (1 - exp(alpha(2))) / mu;
-    else
-    end
 end
 
 %% Plotting Results
@@ -350,15 +237,6 @@ xlabel('$\mu$','Interpreter','latex');
 ylabel('$\limsup||x-x^\star||^2$', 'Interpreter', 'latex');
 set(gcf,'color',[1,1,1]);
 fontname('Times New Roman');
-
-% Rate of Convergence
-if convRateToggle
-    disp('The rate of convergence (coefficient to \mu) obtained is:');
-    disp(convRate);
-    nu = min(eig(D11));
-    disp(['The theoretical lower bound is 2\nu + O(\mu^((K+1)/K)) >= ', num2str(2 * nu), '']);
-else
-end
 
 %% Functions
 function mat = cellToMatrixConversion(cellOfMatrices, index)
